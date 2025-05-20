@@ -5,28 +5,79 @@
 #include "C620.hpp"
 #include <array>
 
-CAN can(PB_12, PB_13, 1e6);
+bool readline(BufferedSerial &serial, char *buffer, size_t size, bool is_integar = false, bool is_float = false);
+float duration_to_sec(const std::chrono::duration<float> &duration);
 
-// class DjiMotor<4>;
-
+class MecanumMotor;
+// 675 765
 int main()
 {
+    BufferedSerial pc(USBTX, USBRX, 115200);
+    BufferedSerial esp(PB_6, PA_10, 115200);
+    CAN can(PB_12, PB_13, 1e6);
+    std::array<bit::Coordinate, motor_amount> motor_pos =
+        {
+            bit::Coordinate(337.5, 382.5),
+            bit::Coordinate(-337.5, 382.5),
+            bit::Coordinate(-337.5, -382.5),
+            bit::Coordinate(337.5, -382.5)
+        };
+    MecanumMotor mecanum(motor_pos, can);
 
+    bit::Velocity robot_vel = {0, 0, 0};
+
+    while (1)
+    {
+        auto now = HighResClock::now();
+        static auto pre = now;
+
+        char received[15] = "";
+        if (readline(esp, received, sizeof(received)) == 0)
+        {
+            if (strcmp(received, "vel") == 0)
+            {
+                char data_vel[8] = "";
+                for (int i = 0; i < 3; i++)
+                {
+                    if (readline(esp, data_vel, sizeof(data_vel), false, true) == 0)
+                    {
+                        switch (i)
+                        {
+                        case 0:
+                            robot_vel.x = atof(data_vel);
+                            break;
+                        case 1:
+                            robot_vel.y = atof(data_vel);
+                            break;
+                        case 2:
+                            robot_vel.ang = atof(data_vel);
+                            break;
+                        }
+                    }
+                }
+            }
+        }
+        if (now - pre > 10ms)
+        {
+            float elapsed = duration_to_sec(now - pre);
+            mecanum.set_mecanum_output(robot_vel, elapsed);
+        }
+    }
 }
 
 constexpr int motor_amount = 4;
 class MecanumMotor
 {
-    public:
-    MecanumMotor(const std::array<bit::Coordinate, motor_amount> motor_pos) : c620_(can), mecanum_(motor_pos)
+public:
+    MecanumMotor(const std::array<bit::Coordinate, motor_amount> motor_pos, CAN &can) : c620_(can), mecanum_(motor_pos)
     {
-        for(int i = 0; i < motor_amount; ++i)
+        for (int i = 0; i < motor_amount; ++i)
         {
             pid_[i] = Pid({gain_, -1, 1});
             pid_[i].reset();
         }
     }
-    bool set_mecanum_output(const bit::Velocity& vel, const float elapsed)
+    bool set_mecanum_output(const bit::Velocity &vel, const float elapsed)
     {
         float motor_vel[motor_amount] = {0};
         mecanum_.calc(vel, motor_vel);
@@ -37,16 +88,17 @@ class MecanumMotor
         bool is_succeed[motor_amount];
         for (int i = 0; i < motor_amount; ++i)
         {
+            float goal_ang_vel = motor_vel[i] / motor_radius * 19 * -1; //C620の減速比である19を掛け, 入力値と測定rpmの符号が逆になるので反転
             is_succeed[i] = pid(motor_vel[i], elapsed, i + 1);
         }
-        if(!(is_succeed[0] && is_succeed[1] && is_succeed[2] && is_succeed[3]))
+        if (!(is_succeed[0] && is_succeed[1] && is_succeed[2] && is_succeed[3]))
         {
             return false;
         }
         return c620_.write();
     }
 
-    private:
+private:
     bool pid(const float goal, const float elapsed, const int id)
     {
         constexpr int k = 2 * M_PI / 60;
@@ -59,4 +111,54 @@ class MecanumMotor
     const PidGain gain_ = {1.0f, 0.1f, 0.01f}; // Example PID gains
     dji::C620 c620_;
     bit::Mecanum mecanum_;
+    const float motor_radius = 1;
 };
+
+bool readline(BufferedSerial &serial, char *buffer, const size_t size, const bool is_integar, const bool is_float)
+{
+    int i = 0;       // 繰り返し変数
+    char buff = '0'; // シリアル受信
+
+    if (not serial.readable())
+    {
+        return 1;
+    }
+
+    while ((buff != '\n') and i < (int)size)
+    {
+        serial.read(&buff, sizeof(buff)); // シリアル受信
+        // printf("%c", buff);
+
+        if (buff != '\n' && buff != '\r')
+        {
+            buffer[i] = buff; // 受信データ保存
+
+            if (is_integar)
+            {
+
+                if (((buff < '0' || buff > '9') && buff != '-'))
+                {
+                    printf("error\n");
+                    return 1;
+                }
+            }
+            if (is_float)
+            {
+
+                if (((buff < '0' || buff > '9') && buff != '.' && buff != '-'))
+                {
+                    printf("error\n");
+                    return 1;
+                }
+            }
+        }
+        i++;
+    }
+    // printf("\n");
+    return 0;
+}
+
+float duration_to_sec(const std::chrono::duration<float> &duration)
+{
+    return duration.count();
+}
