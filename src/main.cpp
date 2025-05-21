@@ -57,6 +57,7 @@ int main()
                 }
             }
         }
+        mecanum.read_motor_rpm();
         if (now - pre > 10ms)
         {
             float elapsed = duration_to_sec(now - pre);
@@ -75,6 +76,13 @@ public:
         {
             pid_[i] = Pid({gain_, -1, 1});
             pid_[i].reset();
+        }
+    }
+    void read_motor_rpm()
+    {
+        for (int i = 0; i < motor_amount; ++i)
+        {
+            c620_.read_data();
         }
     }
     bool set_mecanum_output(const bit::Velocity &vel, const float elapsed)
