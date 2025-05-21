@@ -39,18 +39,18 @@ int main()
                 char data_vel[8] = "";
                 for (int i = 0; i < 3; i++)
                 {
-                    if (readline(esp, data_vel, sizeof(data_vel), false, true) == 0)
+                    if (readline(esp, data_vel, sizeof(data_vel), true, false) == 0)
                     {
                         switch (i)
                         {
                         case 0:
-                            robot_vel.x = atof(data_vel);
+                            robot_vel.x = atoi(data_vel);
                             break;
                         case 1:
-                            robot_vel.y = atof(data_vel);
+                            robot_vel.y = atoi(data_vel);
                             break;
                         case 2:
-                            robot_vel.ang = atof(data_vel);
+                            robot_vel.ang = atoi(data_vel);
                             break;
                         }
                     }
@@ -62,6 +62,7 @@ int main()
         {
             float elapsed = duration_to_sec(now - pre);
             mecanum.set_mecanum_output(robot_vel, elapsed);
+            pre = now;
         }
     }
 }
