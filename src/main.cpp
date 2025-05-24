@@ -93,9 +93,9 @@ int main()
             if (strcmp(received, "vel") == 0)
             {
                 led = !led;
-                char data_vel[8] = "";
                 for (int i = 0; i < 3; i++)
                 {
+                    char data_vel[8] = "";
                     if (readline(esp, data_vel, sizeof(data_vel), true, false) == 0)
                     {
                         switch (i)
