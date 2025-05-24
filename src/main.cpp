@@ -8,65 +8,6 @@
 bool readline(BufferedSerial &serial, char *buffer, size_t size, bool is_integar = false, bool is_float = false);
 float duration_to_sec(const std::chrono::duration<float> &duration);
 
-class MecanumMotor;
-// 675 765
-int main()
-{
-    BufferedSerial pc(USBTX, USBRX, 115200);
-    BufferedSerial esp(PB_6, PA_10, 115200);
-    CAN can(PB_12, PB_13, 1e6);
-    std::array<bit::Coordinate, motor_amount> motor_pos =
-        {
-            bit::Coordinate(337.5, 382.5),
-            bit::Coordinate(-337.5, 382.5),
-            bit::Coordinate(-337.5, -382.5),
-            bit::Coordinate(337.5, -382.5)
-        };
-    MecanumMotor mecanum(motor_pos, can);
-
-    bit::Velocity robot_vel = {0, 0, 0};
-
-    while (1)
-    {
-        auto now = HighResClock::now();
-        static auto pre = now;
-
-        char received[15] = "";
-        if (readline(esp, received, sizeof(received)) == 0)
-        {
-            if (strcmp(received, "vel") == 0)
-            {
-                char data_vel[8] = "";
-                for (int i = 0; i < 3; i++)
-                {
-                    if (readline(esp, data_vel, sizeof(data_vel), true, false) == 0)
-                    {
-                        switch (i)
-                        {
-                        case 0:
-                            robot_vel.x = atoi(data_vel);
-                            break;
-                        case 1:
-                            robot_vel.y = atoi(data_vel);
-                            break;
-                        case 2:
-                            robot_vel.ang = atoi(data_vel);
-                            break;
-                        }
-                    }
-                }
-            }
-        }
-        mecanum.read_motor_rpm();
-        if (now - pre > 10ms)
-        {
-            float elapsed = duration_to_sec(now - pre);
-            mecanum.set_mecanum_output(robot_vel, elapsed);
-            pre = now;
-        }
-    }
-}
-
 constexpr int motor_amount = 4;
 class MecanumMotor
 {
@@ -98,7 +39,7 @@ public:
         for (int i = 0; i < motor_amount; ++i)
         {
             float goal_ang_vel = motor_vel[i] / motor_radius * 19 * -1; //C620の減速比である19を掛け, 入力値と測定rpmの符号が逆になるので反転
-            is_succeed[i] = pid(motor_vel[i], elapsed, i + 1);
+            is_succeed[i] = pid(goal_ang_vel, elapsed, i + 1);
         }
         if (!(is_succeed[0] && is_succeed[1] && is_succeed[2] && is_succeed[3]))
         {
@@ -114,14 +55,76 @@ private:
         const float now = c620_.get_rpm(id) * k;
         const float percent = pid_[id - 1].calc(goal, now, elapsed);
         c620_.set_output_percent(percent, id);
+        return true;
     }
 
     std::array<Pid, motor_amount> pid_;
-    const PidGain gain_ = {1.0f, 0.1f, 0.01f}; // Example PID gains
+    const PidGain gain_ = {0.001, 0.00001, 0.0}; // Example PID gains
     dji::C620 c620_;
     bit::Mecanum mecanum_;
-    const float motor_radius = 1;
+    const float motor_radius = 48.65;
 };
+
+int main()
+{
+    BufferedSerial pc(USBTX, USBRX, 115200);
+    BufferedSerial esp(PB_6, PA_10, 115200);
+    CAN can(PA_11, PA_12, 1e6);
+    std::array<bit::Coordinate, 4> motor_pos =
+        {
+            bit::Coordinate(337.5, 382.5),
+            bit::Coordinate(-337.5, 382.5),
+            bit::Coordinate(-337.5, -382.5),
+            bit::Coordinate(337.5, -382.5)
+        };
+    MecanumMotor mecanum(motor_pos, can);
+
+    bit::Velocity robot_vel = {0, 0, 0};
+    DigitalOut led(LED1);
+
+    while (1)
+    {
+        auto now = HighResClock::now();
+        static auto pre = now;
+
+        char received[15] = "";
+        if (readline(esp, received, sizeof(received)) == 0)
+        {
+            if (strcmp(received, "vel") == 0)
+            {
+                led = !led;
+                char data_vel[8] = "";
+                for (int i = 0; i < 3; i++)
+                {
+                    if (readline(esp, data_vel, sizeof(data_vel), true, false) == 0)
+                    {
+                        switch (i)
+                        {
+                        case 0:
+                            robot_vel.x = atoi(data_vel);
+                            break;
+                        case 1:
+                            robot_vel.y = atoi(data_vel);
+                            break;
+                        case 2:
+                            robot_vel.ang = atoi(data_vel);
+                            break;
+                        }
+                    }
+                }
+                // printf("vel: %f, %f, %f\n", robot_vel.x, robot_vel.y, robot_vel.ang);
+            }
+        }
+        mecanum.read_motor_rpm();
+        if (now - pre > 10ms)
+        {
+            float elapsed = duration_to_sec(now - pre);
+            // printf("elapsed: %f\n", elapsed);
+            printf("set_mecanum_output: %d\n", mecanum.set_mecanum_output(robot_vel, elapsed));
+            pre = now;
+        }
+    }
+}
 
 bool readline(BufferedSerial &serial, char *buffer, const size_t size, const bool is_integar, const bool is_float)
 {
