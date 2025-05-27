@@ -19,6 +19,7 @@ public:
             pid_[i] = Pid({gain_, -1, 1});
             pid_[i].reset();
         }
+        c620_.set_max_output(max_motor_pwr);
     }
     void read_motor_rpm()
     {
@@ -39,39 +40,47 @@ public:
         bool is_succeed[motor_amount];
         for (int i = 0; i < motor_amount; ++i)
         {
-            float goal_ang_vel = motor_vel[i] / motor_radius * 19 * -1; //C620の減速比である19を掛け, 入力値と測定rpmの符号が逆になるので反転
+            // printf("[%d]\n", i);
+            float goal_ang_vel = motor_vel[i] / motor_radius * 19; //C620の減速比である19を掛け, 入力値と測定rpmの符号が逆になるので反転
+            if (i == 0 || i == 4)
+            {
+                goal_ang_vel *= -1;
+            }
             is_succeed[i] = pid(goal_ang_vel, elapsed, i + 1);
+            // printf("goal: %.4f\n", goal_ang_vel);
         }
         if (!(is_succeed[0] && is_succeed[1] && is_succeed[2] && is_succeed[3]))
         {
             return false;
         }
+        // printf("\nnow: %d, %d, %d, %d\n", c620_.get_current(1), c620_.get_current(2), c620_.get_current(3), c620_.get_current(4));
         return c620_.write();
     }
 
 private:
     bool pid(const float goal, const float elapsed, const int id)
     {
-        constexpr int k = 2 * M_PI / 60;
+        constexpr float k = 2 * M_PI / 60;
         const float now = c620_.get_rpm(id) * k;
         const float percent = pid_[id - 1].calc(goal, now, elapsed);
-        printf("%.4f\n", percent);
+        // printf("now: %.4f\n", now);
         c620_.set_output_percent(percent, id);
         return true;
     }
 
     std::array<Pid, motor_amount> pid_;
-    const PidGain gain_ = {0.001, 0.00001, 0.0}; // Example PID gains
+    const PidGain gain_ = {0.001, 0.001, 0.0}; // Example PID gains
     dji::C620 c620_;
     bit::Mecanum mecanum_;
     const float motor_radius = 48.65;
+    const int max_motor_pwr = 8000;
 };
 
 int main()
 {
     BufferedSerial pc(USBTX, USBRX, 115200);
     BufferedSerial esp(PB_6, PA_10, 115200);
-    CAN can(PA_11, PA_12, 1e6);
+    CAN can(PB_12, PB_13, 1e6);
     std::array<bit::Coordinate, 4> motor_pos =
         {
             bit::Coordinate(337.5, 382.5),
