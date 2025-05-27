@@ -31,6 +31,7 @@ public:
     {
         float motor_vel[motor_amount] = {0};
         mecanum_.calc(vel, motor_vel);
+        // printf("%.2f, %.2f, %.2f, %.2f\n", motor_vel[0], motor_vel[1], motor_vel[2], motor_vel[3]);
         for (int i = 0; i < motor_amount; ++i)
         {
             c620_.read_data();
@@ -54,6 +55,7 @@ private:
         constexpr int k = 2 * M_PI / 60;
         const float now = c620_.get_rpm(id) * k;
         const float percent = pid_[id - 1].calc(goal, now, elapsed);
+        printf("%.4f\n", percent);
         c620_.set_output_percent(percent, id);
         return true;
     }
@@ -96,18 +98,18 @@ int main()
                 for (int i = 0; i < 3; i++)
                 {
                     char data_vel[8] = "";
-                    if (readline(esp, data_vel, sizeof(data_vel), true, false) == 0)
+                    if (readline(esp, data_vel, sizeof(data_vel), false, true) == 0)
                     {
                         switch (i)
                         {
                         case 0:
-                            robot_vel.x = atoi(data_vel);
+                            robot_vel.x = atof(data_vel);
                             break;
                         case 1:
-                            robot_vel.y = atoi(data_vel);
+                            robot_vel.y = atof(data_vel);
                             break;
                         case 2:
-                            robot_vel.ang = atoi(data_vel);
+                            robot_vel.ang = atof(data_vel);
                             break;
                         }
                     }
@@ -120,7 +122,9 @@ int main()
         {
             float elapsed = duration_to_sec(now - pre);
             // printf("elapsed: %f\n", elapsed);
-            printf("set_mecanum_output: %d\n", mecanum.set_mecanum_output(robot_vel, elapsed));
+            // printf("set_mecanum_output: %d\n", mecanum.set_mecanum_output(robot_vel, elapsed));
+            mecanum.set_mecanum_output(robot_vel, elapsed);
+            // printf("x: %.2f, y: %.2f, ang: %.2f\n", robot_vel.x, robot_vel.y, robot_vel.ang);
             pre = now;
         }
     }
