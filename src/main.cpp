@@ -107,18 +107,23 @@ int main()
                 for (int i = 0; i < 3; i++)
                 {
                     char data_vel[8] = "";
-                    if (readline(esp, data_vel, sizeof(data_vel), false, true) == 0)
+                    if (readline(esp, data_vel, sizeof(data_vel), true) == 0)
                     {
+                        constexpr int max_trans_vel = 1000;
+                        constexpr float max_rot_vel = 1.4;
                         switch (i)
                         {
                         case 0:
-                            robot_vel.x = atof(data_vel);
+                            const int x = atoi(data_vel);
+                            robot_vel.x = x * max_trans_vel / 128.0;
                             break;
                         case 1:
-                            robot_vel.y = atof(data_vel);
+                            const int y = atoi(data_vel);
+                            robot_vel.y = y * max_trans_vel / 128.0;
                             break;
                         case 2:
-                            robot_vel.ang = atof(data_vel);
+                            const int ang = atoi(data_vel);
+                            robot_vel.ang = ang * max_rot_vel / 128.0;
                             break;
                         }
                     }
