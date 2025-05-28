@@ -42,7 +42,7 @@ public:
         {
             // printf("[%d]\n", i);
             float goal_ang_vel = motor_vel[i] / motor_radius * 19; //C620の減速比である19を掛け, 入力値と測定rpmの符号が逆になるので反転
-            if (i == 0 || i == 4)
+            if (i == 0 || i == 3)
             {
                 goal_ang_vel *= -1;
             }
@@ -92,6 +92,7 @@ int main()
 
     bit::Velocity robot_vel = {0, 0, 0};
     DigitalOut led(LED1);
+    printf("start\n");
 
     while (1)
     {
@@ -111,19 +112,19 @@ int main()
                     {
                         constexpr int max_trans_vel = 1000;
                         constexpr float max_rot_vel = 1.4;
+                        const int x = atoi(data_vel);
+                        const int y = atoi(data_vel);
+                        const int ang = atoi(data_vel);
                         switch (i)
                         {
                         case 0:
-                            const int x = atoi(data_vel);
                             robot_vel.x = x * max_trans_vel / 128.0;
                             break;
                         case 1:
-                            const int y = atoi(data_vel);
                             robot_vel.y = y * max_trans_vel / 128.0;
                             break;
                         case 2:
-                            const int ang = atoi(data_vel);
-                            robot_vel.ang = ang * max_rot_vel / 128.0;
+                            robot_vel.ang = ang * max_rot_vel / 128.0 * -1; //反転させないと思った動きしないので。
                             break;
                         }
                     }
