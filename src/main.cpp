@@ -79,8 +79,9 @@ private:
 int main()
 {
     BufferedSerial pc(USBTX, USBRX, 115200);
-    BufferedSerial esp(PB_6, PA_10, 115200);
+    // BufferedSerial esp(PB_6, PA_10, 115200);
     CAN can(PB_12, PB_13, 1e6);
+    CAN esp(PA_11, PA_12, 1e6);
     std::array<bit::Coordinate, 4> motor_pos =
         {
             bit::Coordinate(337.5, 382.5),
@@ -92,6 +93,9 @@ int main()
 
     bit::Velocity robot_vel = {0, 0, 0};
     DigitalOut led(LED1);
+
+    constexpr int max_trans_vel = 1500;
+    constexpr float max_rot_vel = 3.1;
     printf("start\n");
 
     while (1)
@@ -99,38 +103,17 @@ int main()
         auto now = HighResClock::now();
         static auto pre = now;
 
-        char received[15] = "";
-        if (readline(esp, received, sizeof(received)) == 0)
+        CANMessage msg;
+        if (esp.read(msg); msg.id == 50)
         {
-            if (strcmp(received, "vel") == 0)
-            {
-                led = !led;
-                for (int i = 0; i < 3; i++)
-                {
-                    char data_vel[8] = "";
-                    if (readline(esp, data_vel, sizeof(data_vel), true) == 0)
-                    {
-                        constexpr int max_trans_vel = 1000;
-                        constexpr float max_rot_vel = 1.4;
-                        const int x = atoi(data_vel);
-                        const int y = atoi(data_vel);
-                        const int ang = atoi(data_vel);
-                        switch (i)
-                        {
-                        case 0:
-                            robot_vel.x = x * max_trans_vel / 128.0;
-                            break;
-                        case 1:
-                            robot_vel.y = y * max_trans_vel / 128.0;
-                            break;
-                        case 2:
-                            robot_vel.ang = ang * max_rot_vel / 128.0 * -1; //反転させないと思った動きしないので。
-                            break;
-                        }
-                    }
-                }
-                // printf("vel: %f, %f, %f\n", robot_vel.x, robot_vel.y, robot_vel.ang);
-            }
+            int8_t x = msg.data[0];
+            int8_t y = msg.data[1];
+            int8_t ang = msg.data[2];
+
+            robot_vel.x = x / 128.0 * max_trans_vel;
+            robot_vel.y = y / 128.0 * max_trans_vel;
+            robot_vel.ang = ang / 128.0 * max_rot_vel;
+            printf("%d, %d, %d\n", x, y, ang);
         }
         mecanum.read_motor_rpm();
         if (now - pre > 10ms)
