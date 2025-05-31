@@ -176,7 +176,7 @@ int main()
         {
             robot_vel.x = ps5.lstick_x / 128.0 * max_trans_vel;
             robot_vel.y = ps5.lstick_y / 128.0 * max_trans_vel;
-            robot_vel.ang = ps5.rstick_x / 128.0 * max_trans_vel;
+            robot_vel.ang = ps5.rstick_x / 128.0 * max_trans_vel * -1;
         }
         mecanum.read_motor_rpm();
         if (now - pre > 10ms)
